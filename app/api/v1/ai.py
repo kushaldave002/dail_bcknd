@@ -1,4 +1,4 @@
-"""AI / LLM endpoints — GPT-4o & Gemini integration."""
+"""AI / LLM endpoints — GPT-4o-mini (OpenRouter) & Gemini integration."""
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -12,6 +12,21 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 
 
 # ── Request schemas ──────────────────────────────────────────────────
+class ChatMessage(BaseModel):
+    role: str = Field(..., description="'user' or 'assistant'")
+    content: str = Field(..., description="Message text")
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage] = Field(
+        ..., min_items=1,
+        description=(
+            "Conversation history. Send a single message for a new conversation, "
+            "or the full history for follow-ups. The system auto-detects intent."
+        ),
+    )
+
+
 class NLQueryRequest(BaseModel):
     query: str = Field(..., min_length=3, description="Natural-language question about AI litigation")
 
@@ -33,6 +48,23 @@ class ClassifyRequest(BaseModel):
 class ExtractDocumentRequest(BaseModel):
     image_url: str = Field(..., description="Public URL of the court-document image")
     mime_type: str = Field("image/png", description="MIME type (image/png, image/jpeg, etc.)")
+
+
+# ── 0. Unified Chat — Intelligent Query Interface ────────────────────
+@router.post("/chat")
+async def ai_chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
+    """Unified conversational endpoint with multi-turn support.
+
+    Send a messages array (like OpenAI chat format).  The system
+    auto-detects intent (search, summarize, analyze, classify,
+    create case/docket/document/secondary source) and routes to
+    the appropriate handler.  For create operations, it checks the
+    schema and asks follow-up questions for missing required fields."""
+    try:
+        messages = [{"role": m.role, "content": m.content} for m in body.messages]
+        return await ai_service.chat(messages, db)
+    except Exception as exc:
+        raise HTTPException(502, f"AI service error: {exc}") from exc
 
 
 # ── 1. Natural-Language Search ───────────────────────────────────────
