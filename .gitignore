@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+.Python
+develop-eggs/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual Environment
+venv/
+.venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Environment
+.env
+.env.local
+.env.production
+
+# Node / Next.js
+node_modules/
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Database
+*.db
+*.sqlite3
+
+# Docker
+docker-compose.override.yml
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+
+# OS
+.DS_Store
+Thumbs.db
+~$*
+
+# Logs
+*.log
+logs/
+
+# Temporary
+tmp/
+temp/
+
+# Data files (Caspio exports — keep local, seed via script)
+*.xlsx
+*.docx
+
+# Outdated assets
+er_diagram.jsx
+image.png
