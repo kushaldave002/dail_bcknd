@@ -19,7 +19,7 @@ from typing import Any, Optional
 import google.generativeai as genai
 from openai import AsyncOpenAI
 from sqlalchemy import select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.config import get_settings
 
@@ -79,7 +79,7 @@ _FIELD_DESCRIPTION = "\n".join(
 #  1. Natural-Language Search  (GPT-4o-mini via OpenRouter)
 # =====================================================================
 async def natural_language_search(
-    query: str, db: AsyncSession
+    query: str, db: Session
 ) -> dict[str, Any]:
     """Convert a plain-English question into SQL filters via GPT,
     execute the query, and return results with a GPT summary."""
@@ -143,7 +143,7 @@ Rules:
         f"organizations_involved, date_action_filed "
         f"FROM cases WHERE {where_clause} ORDER BY date_action_filed DESC NULLS LAST LIMIT 50"
     )
-    rows = (await db.execute(sql, params)).mappings().all()
+    rows = db.execute(sql, params).mappings().all()
     cases = [dict(r) for r in rows]
 
     if cases:
@@ -229,7 +229,7 @@ Be concise and accurate.  Only use information provided above."""
 #  3. Trend Analysis  (GPT-4o-mini via OpenRouter)
 # =====================================================================
 async def analyze_trends(
-    question: str, db: AsyncSession
+    question: str, db: Session
 ) -> dict[str, Any]:
     """Fetch aggregate data and ask GPT to identify trends."""
 
@@ -247,7 +247,7 @@ async def analyze_trends(
             max(date_action_filed) AS latest_filing
         FROM cases
     """)
-    stats = dict((await db.execute(stats_sql)).mappings().first())
+    stats = dict(db.execute(stats_sql).mappings().first())
 
     area_sql = text("""
         SELECT area_of_application, count(*) AS cnt
@@ -255,7 +255,7 @@ async def analyze_trends(
         WHERE area_of_application IS NOT NULL AND area_of_application != ''
         GROUP BY area_of_application ORDER BY cnt DESC LIMIT 15
     """)
-    areas = [dict(r) for r in (await db.execute(area_sql)).mappings().all()]
+    areas = [dict(r) for r in db.execute(area_sql).mappings().all()]
 
     issue_sql = text("""
         SELECT issue_list, count(*) AS cnt
@@ -263,7 +263,7 @@ async def analyze_trends(
         WHERE issue_list IS NOT NULL AND issue_list != ''
         GROUP BY issue_list ORDER BY cnt DESC LIMIT 15
     """)
-    issues = [dict(r) for r in (await db.execute(issue_sql)).mappings().all()]
+    issues = [dict(r) for r in db.execute(issue_sql).mappings().all()]
 
     year_sql = text("""
         SELECT EXTRACT(YEAR FROM date_action_filed)::int AS year, count(*) AS cnt
@@ -271,7 +271,7 @@ async def analyze_trends(
         WHERE date_action_filed IS NOT NULL
         GROUP BY year ORDER BY year
     """)
-    yearly = [dict(r) for r in (await db.execute(year_sql)).mappings().all()]
+    yearly = [dict(r) for r in db.execute(year_sql).mappings().all()]
 
     context_blob = json.dumps(
         {"stats": stats, "areas": areas, "issues": issues, "yearly": yearly},
@@ -600,7 +600,7 @@ def _coerce_record(table: str, data: dict[str, Any]) -> dict[str, Any]:
     return clean
 
 
-async def _insert_record(table: str, data: dict[str, Any], db: AsyncSession) -> dict[str, Any]:
+def _insert_record(table: str, data: dict[str, Any], db: Session) -> dict[str, Any]:
     """Coerce types, auto-generate keys, and insert a record."""
     from app.models.case import Case
     from app.models.docket import Docket
@@ -616,7 +616,7 @@ async def _insert_record(table: str, data: dict[str, Any], db: AsyncSession) -> 
 
     # Auto-generate record_number for cases
     if table == "case" and "record_number" not in data:
-        row = await db.execute(
+        row = db.execute(
             text("SELECT COALESCE(MAX(record_number), 0) + 1 AS next_rn FROM cases")
         )
         data["record_number"] = row.scalar_one()
@@ -625,8 +625,8 @@ async def _insert_record(table: str, data: dict[str, Any], db: AsyncSession) -> 
     clean_data = _coerce_record(table, data)
     obj = model_cls(**clean_data)
     db.add(obj)
-    await db.flush()
-    await db.refresh(obj)
+    db.flush()
+    db.refresh(obj)
 
     return {
         col.name: getattr(obj, col.name)
@@ -635,7 +635,7 @@ async def _insert_record(table: str, data: dict[str, Any], db: AsyncSession) -> 
     }
 
 
-async def chat(messages: list[dict[str, str]], db: AsyncSession) -> dict[str, Any]:
+async def chat(messages: list[dict[str, str]], db: Session) -> dict[str, Any]:
     """Multi-turn chat endpoint: classify intent from conversation history,
     dispatch to the right handler, and for create operations check the
     schema and ask follow-up questions for missing fields.  Once all
@@ -736,7 +736,7 @@ async def chat(messages: list[dict[str, str]], db: AsyncSession) -> dict[str, An
 
             # ── All required present — insert into database ───────────
             try:
-                created = await _insert_record(table, extracted, db)
+                created = _insert_record(table, extracted, db)
                 return {
                     "intent": intent,
                     "reasoning": reasoning,
@@ -810,12 +810,12 @@ async def chat(messages: list[dict[str, str]], db: AsyncSession) -> dict[str, An
 
             case_obj = None
             if case_id:
-                case_obj = await db.get(Case, int(case_id))
+                case_obj = db.get(Case, int(case_id))
             if not case_obj and case_name:
                 stmt = select(Case).where(
                     Case.caption.ilike(f"%{case_name}%")
                 ).limit(1)
-                row = await db.execute(stmt)
+                row = db.execute(stmt)
                 case_obj = row.scalar_one_or_none()
 
             if not case_obj:

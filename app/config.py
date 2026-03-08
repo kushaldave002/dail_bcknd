@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = "http://localhost:3000,http://localhost:8000"
 
     # ── Database ─────────────────────────────────────────────────────
-    DATABASE_URL: str = "postgresql+asyncpg://dail:dail_password@localhost:5432/dail_db"
+    DATABASE_URL: str = "postgresql://dail:dail_password@localhost:5432/dail_db"
     DATABASE_URL_SYNC: str = "postgresql://dail:dail_password@localhost:5432/dail_db"
 
     # ── AI / LLM Keys ───────────────────────────────────────────────

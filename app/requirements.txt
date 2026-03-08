@@ -7,10 +7,11 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 
 # Database
-# psycopg2-binary is intentionally excluded — Vercel cannot compile its C extensions.
-# asyncpg is used exclusively for async database access.
+# pg8000 is a pure-Python PostgreSQL driver — no C extensions, no OpenSSL.
+# asyncpg and psycopg2-binary both trigger [Errno 16] on Vercel's Lambda
+# runtime due to OpenSSL's /dev/urandom access being restricted.
 sqlalchemy==2.0.36
-asyncpg==0.30.0
+pg8000==1.31.2
 alembic==1.14.1
 
 # AI / LLM
