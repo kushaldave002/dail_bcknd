@@ -194,7 +194,8 @@ See [.env.example](.env.example) for all configuration options:
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL async connection string |
-| `OPENAI_API_KEY` | OpenAI API key (optional — enables AI endpoints) |
+| `OPENROUTER_API_KEY` | OpenRouter API key (optional — enables GPT-4o-mini AI endpoints) |
+| `OPENAI_API_KEY` | OpenAI API key (optional — legacy) |
 | `GEMINI_API_KEY` | Google Gemini API key (optional — enables image extraction) |
 
 ---
