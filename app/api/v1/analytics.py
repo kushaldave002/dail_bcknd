@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends
 from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.models.case import Case
@@ -14,34 +14,34 @@ router = APIRouter(prefix="/analytics", tags=["analytics"])
 
 
 @router.get("/summary")
-async def analytics_summary(db: AsyncSession = Depends(get_db)):
+def analytics_summary(db: Session = Depends(get_db)):
     """Return high-level database statistics for a dashboard."""
 
-    total_cases = (await db.execute(select(func.count(Case.id)))).scalar_one()
-    total_dockets = (await db.execute(select(func.count(Docket.id)))).scalar_one()
-    total_documents = (await db.execute(select(func.count(Document.id)))).scalar_one()
-    total_sources = (await db.execute(select(func.count(SecondarySource.id)))).scalar_one()
+    total_cases = db.execute(select(func.count(Case.id))).scalar_one()
+    total_dockets = db.execute(select(func.count(Docket.id))).scalar_one()
+    total_documents = db.execute(select(func.count(Document.id))).scalar_one()
+    total_sources = db.execute(select(func.count(SecondarySource.id))).scalar_one()
 
     # Status breakdown
     status_sql = text("""
         SELECT coalesce(status_disposition, 'Unknown') AS status, count(*) AS count
         FROM cases GROUP BY status ORDER BY count DESC
     """)
-    statuses = [dict(r) for r in (await db.execute(status_sql)).mappings().all()]
+    statuses = [dict(r) for r in db.execute(status_sql).mappings().all()]
 
     # Jurisdiction type breakdown
     jtype_sql = text("""
         SELECT coalesce(jurisdiction_type, 'Unknown') AS jurisdiction_type, count(*) AS count
         FROM cases GROUP BY jurisdiction_type ORDER BY count DESC
     """)
-    jtypes = [dict(r) for r in (await db.execute(jtype_sql)).mappings().all()]
+    jtypes = [dict(r) for r in db.execute(jtype_sql).mappings().all()]
 
     # Area of application breakdown
     area_sql = text("""
         SELECT coalesce(area_of_application, 'Unknown') AS area, count(*) AS count
         FROM cases GROUP BY area ORDER BY count DESC LIMIT 15
     """)
-    areas = [dict(r) for r in (await db.execute(area_sql)).mappings().all()]
+    areas = [dict(r) for r in db.execute(area_sql).mappings().all()]
 
     # Yearly filing distribution
     yearly_sql = text("""
@@ -49,7 +49,7 @@ async def analytics_summary(db: AsyncSession = Depends(get_db)):
         FROM cases WHERE date_action_filed IS NOT NULL
         GROUP BY year ORDER BY year
     """)
-    yearly = [dict(r) for r in (await db.execute(yearly_sql)).mappings().all()]
+    yearly = [dict(r) for r in db.execute(yearly_sql).mappings().all()]
 
     return {
         "totals": {

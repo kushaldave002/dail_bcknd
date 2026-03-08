@@ -4,7 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.models.case import Case
@@ -15,14 +15,14 @@ router = APIRouter(prefix="/search", tags=["search"])
 
 
 @router.get("", response_model=PaginatedResponse[CaseResponse])
-async def search_cases(
+def search_cases(
     q: str = Query(..., min_length=1, description="Search query"),
     status: Optional[str] = None,
     jurisdiction_type: Optional[str] = None,
     area_of_application: Optional[str] = None,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
-    db: AsyncSession = Depends(get_db),
+    db: Session = Depends(get_db),
 ):
     """Full-text search across cases with optional field filters.
 
@@ -40,11 +40,11 @@ async def search_cases(
         stmt = stmt.where(Case.area_of_application.ilike(f"%{area_of_application}%"))
 
     count_stmt = select(func.count()).select_from(stmt.subquery())
-    total = (await db.execute(count_stmt)).scalar_one()
+    total = db.execute(count_stmt).scalar_one()
 
     # Rank by relevance
     rank = func.ts_rank_cd(Case.search_vector, ts_query)
     stmt = stmt.order_by(rank.desc()).offset(skip).limit(limit)
-    rows = (await db.execute(stmt)).scalars().all()
+    rows = db.execute(stmt).scalars().all()
 
     return PaginatedResponse(items=rows, total=total, skip=skip, limit=limit)

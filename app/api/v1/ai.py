@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.models.case import Case
@@ -19,7 +19,7 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage] = Field(
-        ..., min_items=1,
+        ..., min_length=1,
         description=(
             "Conversation history. Send a single message for a new conversation, "
             "or the full history for follow-ups. The system auto-detects intent."
@@ -52,14 +52,8 @@ class ExtractDocumentRequest(BaseModel):
 
 # ── 0. Unified Chat — Intelligent Query Interface ────────────────────
 @router.post("/chat")
-async def ai_chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
-    """Unified conversational endpoint with multi-turn support.
-
-    Send a messages array (like OpenAI chat format).  The system
-    auto-detects intent (search, summarize, analyze, classify,
-    create case/docket/document/secondary source) and routes to
-    the appropriate handler.  For create operations, it checks the
-    schema and asks follow-up questions for missing required fields."""
+async def ai_chat(body: ChatRequest, db: Session = Depends(get_db)):
+    """Unified conversational endpoint with multi-turn support."""
     try:
         messages = [{"role": m.role, "content": m.content} for m in body.messages]
         return await ai_service.chat(messages, db)
@@ -69,9 +63,8 @@ async def ai_chat(body: ChatRequest, db: AsyncSession = Depends(get_db)):
 
 # ── 1. Natural-Language Search ───────────────────────────────────────
 @router.post("/query")
-async def ai_query(body: NLQueryRequest, db: AsyncSession = Depends(get_db)):
-    """Convert a natural-language question into database filters via GPT,
-    execute the query, and return results with a GPT-generated summary."""
+async def ai_query(body: NLQueryRequest, db: Session = Depends(get_db)):
+    """Convert a natural-language question into database filters via GPT."""
     try:
         return await ai_service.natural_language_search(body.query, db)
     except Exception as exc:
@@ -80,9 +73,9 @@ async def ai_query(body: NLQueryRequest, db: AsyncSession = Depends(get_db)):
 
 # ── 2. Case Summarisation ───────────────────────────────────────────
 @router.post("/summarize/{case_id}")
-async def ai_summarize(case_id: int, db: AsyncSession = Depends(get_db)):
+async def ai_summarize(case_id: int, db: Session = Depends(get_db)):
     """Generate a GPT summary for a specific case."""
-    case = await db.get(Case, case_id)
+    case = db.get(Case, case_id)
     if not case:
         raise HTTPException(404, "Case not found")
 
@@ -99,7 +92,7 @@ async def ai_summarize(case_id: int, db: AsyncSession = Depends(get_db)):
 
 # ── 3. Trend Analysis ───────────────────────────────────────────────
 @router.post("/analyze")
-async def ai_analyze(body: TrendRequest, db: AsyncSession = Depends(get_db)):
+async def ai_analyze(body: TrendRequest, db: Session = Depends(get_db)):
     """Analyse trends across the DAIL dataset using GPT."""
     try:
         return await ai_service.analyze_trends(body.question, db)
@@ -120,8 +113,7 @@ async def ai_classify(body: ClassifyRequest):
 # ── 5. Document Image Extraction (Gemini) ────────────────────────────
 @router.post("/extract-document")
 async def ai_extract_document(body: ExtractDocumentRequest):
-    """Extract text and structured fields from a court-document image
-    using Google Gemini."""
+    """Extract text and structured fields from a court-document image using Gemini."""
     try:
         return await ai_service.extract_document_from_image(
             body.image_url, body.mime_type,

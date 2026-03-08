@@ -1,20 +1,24 @@
 """FastAPI dependency injection helpers."""
 
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 
-from app.database import async_session_factory
+from app.database import SessionLocal
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Yield a database session per-request with auto-commit/rollback."""
-    async with async_session_factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+def get_db() -> Generator[Session, None, None]:
+    """Yield a synchronous database session per-request with auto-commit/rollback.
+
+    FastAPI automatically runs sync dependencies in a thread pool,
+    so async endpoints continue to work correctly.
+    """
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

@@ -1,73 +1,69 @@
 """
 DAIL Backend - Database Connection Management
 
-Async SQLAlchemy engine and session factory for PostgreSQL.
+Synchronous SQLAlchemy engine and session factory for PostgreSQL.
+Uses psycopg2-binary which works reliably on Vercel's serverless environment.
+(asyncpg triggers [Errno 16] Device or resource busy on Vercel's Lambda runtime.)
 """
 
-import ssl
-from collections.abc import AsyncGenerator
+from collections.abc import Generator
 
-from sqlalchemy.ext.asyncio import (
-    AsyncSession,
-    async_sessionmaker,
-    create_async_engine,
-)
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy import create_engine
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
 settings = get_settings()
 
-# ── SSL Context ──────────────────────────────────────────────────────────
-# Vercel's serverless environment (AWS Lambda) restricts how asyncpg
-# initialises SSL when passed as a plain string ("require").
-# Passing a pre-built ssl.SSLContext avoids [Errno 16] Device or resource busy.
-_ssl_ctx = ssl.create_default_context()
-_ssl_ctx.check_hostname = False
-_ssl_ctx.verify_mode = ssl.CERT_NONE
+# ── Engine ────────────────────────────────────────────────────────────────
+# NullPool — required for serverless; no persistent connection pools.
+# psycopg2-binary works on Vercel; asyncpg does not (EBUSY on Lambda).
 
-# ── Async Engine ─────────────────────────────────────────────────────────
-# NullPool is required for serverless environments (Vercel).
-# Persistent connection pools cannot survive cold starts in stateless functions.
-
-# Auto-correct DATABASE_URL to use asyncpg driver (psycopg2 is not available on Vercel)
+# Normalise scheme to plain postgresql+psycopg2://
 _db_url = str(settings.DATABASE_URL)
-if _db_url.startswith("postgresql://"):
-    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-elif _db_url.startswith("postgres://"):
-    _db_url = _db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+for _old in ("postgresql+asyncpg://", "postgres+asyncpg://"):
+    if _db_url.startswith(_old):
+        _db_url = "postgresql+psycopg2://" + _db_url[len(_old):]
+        break
+if _db_url.startswith("postgres://"):
+    _db_url = "postgresql+psycopg2://" + _db_url[len("postgres://"):]
+elif _db_url.startswith("postgresql://"):
+    _db_url = "postgresql+psycopg2://" + _db_url[len("postgresql://"):]
 
-engine = create_async_engine(
+# sslmode=require appended for Supabase (safe to add even if already present)
+if "sslmode" not in _db_url:
+    _db_url += ("&" if "?" in _db_url else "?") + "sslmode=require"
+
+engine = create_engine(
     _db_url,
     echo=settings.DEBUG,
     poolclass=NullPool,
-    connect_args={"ssl": _ssl_ctx},
 )
 
-# ── Session Factory ──────────────────────────────────────────────────────
-async_session_factory = async_sessionmaker(
-    engine,
-    class_=AsyncSession,
-    expire_on_commit=False,
+# ── Session Factory ───────────────────────────────────────────────────────
+SessionLocal = sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
 )
 
 
-# ── Base Model ───────────────────────────────────────────────────────────
+# ── Base Model ────────────────────────────────────────────────────────────
 class Base(DeclarativeBase):
     """Base class for all SQLAlchemy ORM models."""
     pass
 
 
-# ── Dependency ───────────────────────────────────────────────────────────
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+# ── Dependency ────────────────────────────────────────────────────────────
+def get_db() -> Generator[Session, None, None]:
     """FastAPI dependency that provides a database session per request."""
-    async with async_session_factory() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+    db = SessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()

@@ -7,10 +7,10 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 
 # Database
-# psycopg2-binary is intentionally excluded — Vercel cannot compile its C extensions.
-# asyncpg is used exclusively for async database access.
+# psycopg2-binary ships as a pre-compiled wheel and works on Vercel's Lambda runtime.
+# asyncpg triggers [Errno 16] Device or resource busy on Vercel — do NOT use it.
 sqlalchemy==2.0.36
-asyncpg==0.30.0
+psycopg2-binary==2.9.10
 alembic==1.14.1
 
 # AI / LLM
