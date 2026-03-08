@@ -33,6 +33,7 @@ engine = create_async_engine(
     _db_url,
     echo=settings.DEBUG,
     poolclass=NullPool,
+    connect_args={"ssl": "require"},
 )
 
 # ── Session Factory ──────────────────────────────────────────────────────

@@ -2,6 +2,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { casesApi, docketsApi, documentsApi, secondarySourcesApi, searchApi, analyticsApi, healthApi, aiApi } from './api';
 import type { PaginatedResponse, CaseResponse, DocketResponse, DocumentResponse, SecondarySourceResponse, AnalyticsSummary } from '@/types';
 
+// Poll interval for near-realtime updates (ms)
+const REALTIME_POLL_INTERVAL = 5_000;
+
 // ─── Keys ──────────────────────────────────────────
 export const queryKeys = {
     cases: ['cases'] as const,
@@ -20,6 +23,7 @@ export function useCases(params?: { skip?: number; limit?: number; status?: stri
         queryKey: [...queryKeys.cases, params],
         queryFn: () => casesApi.list(params),
         placeholderData: (prev: any) => prev,
+        refetchInterval: REALTIME_POLL_INTERVAL,
     });
 }
 
@@ -28,6 +32,7 @@ export function useCase(id: number) {
         queryKey: queryKeys.caseDetail(id),
         queryFn: () => casesApi.get(id),
         enabled: !!id,
+        refetchInterval: REALTIME_POLL_INTERVAL,
     });
 }
 
@@ -53,6 +58,7 @@ export function useDockets(params?: { skip?: number; limit?: number; case_id?: n
         queryKey: [...queryKeys.dockets, params],
         queryFn: () => docketsApi.list(params),
         placeholderData: (prev: any) => prev,
+        refetchInterval: REALTIME_POLL_INTERVAL,
     });
 }
 
@@ -62,6 +68,7 @@ export function useDocuments(params?: { skip?: number; limit?: number; case_id?:
         queryKey: [...queryKeys.documents, params],
         queryFn: () => documentsApi.list(params),
         placeholderData: (prev: any) => prev,
+        refetchInterval: REALTIME_POLL_INTERVAL,
     });
 }
 
@@ -71,6 +78,7 @@ export function useSecondarySources(params?: { skip?: number; limit?: number; ca
         queryKey: [...queryKeys.secondarySources, params],
         queryFn: () => secondarySourcesApi.list(params),
         placeholderData: (prev: any) => prev,
+        refetchInterval: REALTIME_POLL_INTERVAL,
     });
 }
 
@@ -88,6 +96,7 @@ export function useAnalytics() {
     return useQuery<AnalyticsSummary>({
         queryKey: queryKeys.analytics,
         queryFn: analyticsApi.summary,
+        refetchInterval: 10_000,
     });
 }
 
