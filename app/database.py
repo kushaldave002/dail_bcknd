@@ -12,19 +12,19 @@ from sqlalchemy.ext.asyncio import (
     create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.config import get_settings
 
 settings = get_settings()
 
 # ── Async Engine ─────────────────────────────────────────────────────────
+# NullPool is required for serverless environments (Vercel).
+# Persistent connection pools cannot survive cold starts in stateless functions.
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
-    pool_size=20,
-    max_overflow=10,
-    pool_pre_ping=True,
-    pool_recycle=3600,
+    poolclass=NullPool,
 )
 
 # ── Session Factory ──────────────────────────────────────────────────────
