@@ -4,6 +4,7 @@ DAIL Backend - Database Connection Management
 Async SQLAlchemy engine and session factory for PostgreSQL.
 """
 
+import ssl
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -17,6 +18,14 @@ from sqlalchemy.pool import NullPool
 from app.config import get_settings
 
 settings = get_settings()
+
+# ── SSL Context ──────────────────────────────────────────────────────────
+# Vercel's serverless environment (AWS Lambda) restricts how asyncpg
+# initialises SSL when passed as a plain string ("require").
+# Passing a pre-built ssl.SSLContext avoids [Errno 16] Device or resource busy.
+_ssl_ctx = ssl.create_default_context()
+_ssl_ctx.check_hostname = False
+_ssl_ctx.verify_mode = ssl.CERT_NONE
 
 # ── Async Engine ─────────────────────────────────────────────────────────
 # NullPool is required for serverless environments (Vercel).
@@ -33,7 +42,7 @@ engine = create_async_engine(
     _db_url,
     echo=settings.DEBUG,
     poolclass=NullPool,
-    connect_args={"ssl": "require"},
+    connect_args={"ssl": _ssl_ctx},
 )
 
 # ── Session Factory ──────────────────────────────────────────────────────
