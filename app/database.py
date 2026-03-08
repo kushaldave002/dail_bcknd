@@ -1,11 +1,15 @@
 """
 DAIL Backend - Database Connection Management
 
-Synchronous SQLAlchemy engine and session factory for PostgreSQL.
-Uses psycopg2-binary which works reliably on Vercel's serverless environment.
-(asyncpg triggers [Errno 16] Device or resource busy on Vercel's Lambda runtime.)
+Synchronous SQLAlchemy engine using pg8000 — a pure-Python PostgreSQL driver.
+
+Driver history:
+  - asyncpg:        FAILS on Vercel Lambda — [Errno 16] via OpenSSL /dev/urandom
+  - psycopg2-binary: FAILS on Vercel Lambda — same root cause (OpenSSL C extension)
+  - pg8000:         WORKS — pure Python, uses Python's ssl module (no OpenSSL C calls)
 """
 
+import ssl
 from collections.abc import Generator
 
 from sqlalchemy import create_engine
@@ -16,29 +20,40 @@ from app.config import get_settings
 
 settings = get_settings()
 
+# ── Normalise DATABASE_URL scheme to pg8000 ───────────────────────────────
+_db_url = str(settings.DATABASE_URL)
+
+_old_schemes = [
+    "postgresql+asyncpg://",
+    "postgres+asyncpg://",
+    "postgresql+psycopg2://",
+    "postgres+psycopg2://",
+]
+_replaced = False
+for _old in _old_schemes:
+    if _db_url.startswith(_old):
+        _db_url = "postgresql+pg8000://" + _db_url[len(_old):]
+        _replaced = True
+        break
+
+if not _replaced:
+    if _db_url.startswith("postgres://"):
+        _db_url = "postgresql+pg8000://" + _db_url[len("postgres://"):]
+    elif _db_url.startswith("postgresql://"):
+        _db_url = "postgresql+pg8000://" + _db_url[len("postgresql://"):]
+
+# ── SSL Context (pure Python ssl module — works on Vercel Lambda) ─────────
+_ssl_ctx = ssl.create_default_context()
+_ssl_ctx.check_hostname = False
+_ssl_ctx.verify_mode = ssl.CERT_NONE  # Supabase pooler uses self-signed cert
+
 # ── Engine ────────────────────────────────────────────────────────────────
 # NullPool — required for serverless; no persistent connection pools.
-# psycopg2-binary works on Vercel; asyncpg does not (EBUSY on Lambda).
-
-# Normalise scheme to plain postgresql+psycopg2://
-_db_url = str(settings.DATABASE_URL)
-for _old in ("postgresql+asyncpg://", "postgres+asyncpg://"):
-    if _db_url.startswith(_old):
-        _db_url = "postgresql+psycopg2://" + _db_url[len(_old):]
-        break
-if _db_url.startswith("postgres://"):
-    _db_url = "postgresql+psycopg2://" + _db_url[len("postgres://"):]
-elif _db_url.startswith("postgresql://"):
-    _db_url = "postgresql+psycopg2://" + _db_url[len("postgresql://"):]
-
-# sslmode=require appended for Supabase (safe to add even if already present)
-if "sslmode" not in _db_url:
-    _db_url += ("&" if "?" in _db_url else "?") + "sslmode=require"
-
 engine = create_engine(
     _db_url,
     echo=settings.DEBUG,
     poolclass=NullPool,
+    connect_args={"ssl_context": _ssl_ctx},  # pg8000 uses ssl_context key
 )
 
 # ── Session Factory ───────────────────────────────────────────────────────
@@ -57,7 +72,7 @@ class Base(DeclarativeBase):
 
 # ── Dependency ────────────────────────────────────────────────────────────
 def get_db() -> Generator[Session, None, None]:
-    """FastAPI dependency that provides a database session per request."""
+    """FastAPI dependency — sync session per request, runs in thread pool."""
     db = SessionLocal()
     try:
         yield db
