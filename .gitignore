@@ -26,10 +26,16 @@ ENV/
 *.swo
 *~
 
-# Environment
+# Environment & secrets (never commit real keys)
 .env
+.env.*
+!.env.example
 .env.local
 .env.production
+.env.development
+.env.staging
+.env.test
+.env.secret
 
 # Node / Next.js
 node_modules/
@@ -54,6 +60,7 @@ htmlcov/
 .DS_Store
 Thumbs.db
 ~$*
+._*
 
 # Logs
 *.log
