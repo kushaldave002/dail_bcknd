@@ -21,8 +21,16 @@ settings = get_settings()
 # ── Async Engine ─────────────────────────────────────────────────────────
 # NullPool is required for serverless environments (Vercel).
 # Persistent connection pools cannot survive cold starts in stateless functions.
+
+# Auto-correct DATABASE_URL to use asyncpg driver (psycopg2 is not available on Vercel)
+_db_url = str(settings.DATABASE_URL)
+if _db_url.startswith("postgresql://"):
+    _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+elif _db_url.startswith("postgres://"):
+    _db_url = _db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _db_url,
     echo=settings.DEBUG,
     poolclass=NullPool,
 )
