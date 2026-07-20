@@ -203,3 +203,11 @@ See [.env.example](.env.example) for all configuration options:
 ## License
 
 See [LICENSE](LICENSE) for details.
+
+---
+
+## Team & Recognition
+
+Built by a 3-person team for the GW Trustworthy AI (TAI) Hackathon, where it won 3 spot prizes including Most Innovative Use of AI. This repo is forked from the team's original (Dhwanil25/DAIL_Backend); I was the top committer on the team for this backend.
+
+---
